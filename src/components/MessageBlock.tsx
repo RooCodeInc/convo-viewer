@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 
 interface ContentBlock {
   type: string
@@ -113,9 +115,38 @@ export default function MessageBlock({ block, expanded: initialExpanded }: Messa
               {block.input && (
                 <div>
                   <div className="text-xs text-yellow-400 mb-1">Input:</div>
-                  <pre className="text-xs text-slate-200 bg-slate-900 p-2 rounded overflow-x-auto">
+                  <SyntaxHighlighter
+                    language="json"
+                    style={{
+                      ...vscDarkPlus,
+                      'pre[class*="language-"]': {
+                        ...vscDarkPlus['pre[class*="language-"]'],
+                        background: 'rgb(15 23 42)',
+                      },
+                      'code[class*="language-"]': {
+                        ...vscDarkPlus['code[class*="language-"]'],
+                        background: 'transparent',
+                      },
+                    }}
+                    customStyle={{
+                      margin: 0,
+                      padding: '0.5rem',
+                      borderRadius: '0.25rem',
+                      fontSize: '0.75rem',
+                      background: 'rgb(15 23 42)',
+                      overflow: 'hidden',
+                    }}
+                    wrapLongLines
+                    codeTagProps={{
+                      style: {
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-all',
+                        background: 'transparent',
+                      }
+                    }}
+                  >
                     {JSON.stringify(block.input, null, 2)}
-                  </pre>
+                  </SyntaxHighlighter>
                 </div>
               )}
             </div>
