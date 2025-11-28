@@ -28,8 +28,13 @@ interface ContentBlock {
 
 type Source = 'nightly' | 'production'
 
+function getStoredSource(): Source {
+  const stored = localStorage.getItem('convo-viewer-source')
+  return stored === 'production' ? 'production' : 'nightly'
+}
+
 export default function App() {
-  const [source, setSource] = useState<Source>('nightly')
+  const [source, setSource] = useState<Source>(getStoredSource)
   const [tasks, setTasks] = useState<Task[]>([])
   const [selectedTask, setSelectedTask] = useState<string | null>(null)
   const [conversation, setConversation] = useState<Message[] | null>(null)
@@ -102,7 +107,11 @@ export default function App() {
               <label className="text-sm text-slate-400">Source:</label>
               <select
                 value={source}
-                onChange={(e) => setSource(e.target.value as Source)}
+                onChange={(e) => {
+                  const newSource = e.target.value as Source
+                  localStorage.setItem('convo-viewer-source', newSource)
+                  setSource(newSource)
+                }}
                 className="border border-slate-600 rounded-md px-3 py-2 bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="nightly">Nightly</option>
