@@ -15,8 +15,18 @@ interface ContentBlock {
 
 interface Message {
   role: 'user' | 'assistant'
-  content: ContentBlock[]
+  content: ContentBlock[] | string
   ts: number
+}
+
+function normalizeContent(content: ContentBlock[] | string): ContentBlock[] {
+  if (typeof content === 'string') {
+    return [{ type: 'text', text: content }]
+  }
+  if (!Array.isArray(content)) {
+    return [{ type: 'text', text: String(content) }]
+  }
+  return content
 }
 
 interface ConversationViewProps {
@@ -152,7 +162,7 @@ export default function ConversationView({ messages, taskId, onClose }: Conversa
             </div>
             
             <div className="space-y-3">
-              {message.content.map((block, blockIndex) => (
+              {normalizeContent(message.content).map((block, blockIndex) => (
                 <MessageBlock
                   key={blockIndex}
                   block={block}

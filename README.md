@@ -24,4 +24,12 @@ pnpm i
 pnpm dev
 ```
 
-Open http://localhost:5173
+Open http://localhost:41840
+
+## Port Configuration
+
+The app uses uncommon default ports to avoid conflicts:
+- **Backend server**: 41839
+- **Frontend dev server**: 41840
+
+If either port is in use, the app will automatically find the next available port and continue working. The backend writes its port to a `.server-port` file that the frontend reads to configure the proxy correctly.

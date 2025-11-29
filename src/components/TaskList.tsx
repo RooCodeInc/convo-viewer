@@ -8,9 +8,10 @@ interface TaskListProps {
   tasks: Task[]
   selectedTask: string | null
   onSelectTask: (id: string) => void
+  disabled?: boolean
 }
 
-export default function TaskList({ tasks, selectedTask, onSelectTask }: TaskListProps) {
+export default function TaskList({ tasks, selectedTask, onSelectTask, disabled = false }: TaskListProps) {
   function formatDate(timestamp: number) {
     return new Date(timestamp).toLocaleString()
   }
@@ -27,8 +28,11 @@ export default function TaskList({ tasks, selectedTask, onSelectTask }: TaskList
           tasks.map((task) => (
             <button
               key={task.id}
-              onClick={() => onSelectTask(task.id)}
-              className={`w-full text-left p-4 hover:bg-slate-700/50 transition-colors ${
+              onClick={() => !disabled && onSelectTask(task.id)}
+              disabled={disabled}
+              className={`w-full text-left p-4 transition-colors ${
+                disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-700/50'
+              } ${
                 selectedTask === task.id ? 'bg-blue-900/30 border-l-4 border-blue-500' : ''
               }`}
             >
