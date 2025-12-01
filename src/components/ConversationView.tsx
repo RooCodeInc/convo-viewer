@@ -64,6 +64,14 @@ export default function ConversationView({ messages, taskId, onClose }: Conversa
     return new Date(timestamp).toLocaleString()
   }
 
+  const copyConversation = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(messages, null, 2))
+    } catch (err) {
+      console.error('Failed to copy conversation:', err)
+    }
+  }, [messages])
+
   const scrollToBottom = useCallback(() => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTo({
@@ -100,6 +108,13 @@ export default function ConversationView({ messages, taskId, onClose }: Conversa
             className="px-3 py-1 text-sm bg-slate-700 hover:bg-slate-600 text-slate-200 rounded transition-colors"
           >
             {expandAll ? 'Collapse All' : 'Expand All'}
+          </button>
+          <button
+            onClick={copyConversation}
+            className="px-3 py-1 text-sm bg-slate-700 hover:bg-slate-600 text-slate-200 rounded transition-colors"
+            title="Copy conversation JSON"
+          >
+            Copy
           </button>
           <button
             onClick={onClose}
