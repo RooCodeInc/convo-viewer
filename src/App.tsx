@@ -12,6 +12,12 @@ interface Message {
   role: 'user' | 'assistant'
   content: ContentBlock[]
   ts: number
+  isSummary?: boolean
+  condenseId?: string
+  condenseParent?: string
+  isTruncationMarker?: boolean
+  truncationId?: string
+  truncationParent?: string
 }
 
 interface ContentBlock {
@@ -38,7 +44,8 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [selectedTask, setSelectedTask] = useState<string | null>(null)
   const [conversation, setConversation] = useState<Message[] | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loadingTasks, setLoadingTasks] = useState(false)
+  const [loadingConversation, setLoadingConversation] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -97,7 +104,7 @@ export default function App() {
   }, [selectedTask, source])
 
   async function loadTasks() {
-    setLoading(true)
+    setLoadingTasks(true)
     setError(null)
     setSelectedTask(null)
     setConversation(null)
@@ -110,24 +117,38 @@ export default function App() {
     } catch (err) {
       setError('Failed to load tasks. Make sure the server is running.')
     } finally {
-      setLoading(false)
+      setLoadingTasks(false)
     }
   }
 
   async function loadConversation(taskId: string) {
-    setLoading(true)
+    // Don't allow clicking if already loading
+    if (loadingConversation) return
+    
+    setLoadingConversation(true)
     setError(null)
+    setSelectedTask(taskId) // Set immediately to show selection
+    setConversation(null) // Clear old conversation
     
     try {
       const res = await fetch(`/api/task/${source}/${taskId}`)
-      if (!res.ok) throw new Error('Failed to load conversation')
+      if (!res.ok) {
+        if (res.status === 404) {
+          setError('Conversation not found. The task may have been deleted.')
+          setSelectedTask(null)
+          loadTasks()
+          return
+        }
+        throw new Error('Failed to load conversation')
+      }
       const data = await res.json()
+      // Only set if this is still the selected task (prevents race conditions)
       setConversation(data)
-      setSelectedTask(taskId)
     } catch (err) {
       setError('Failed to load conversation')
+      setSelectedTask(null)
     } finally {
-      setLoading(false)
+      setLoadingConversation(false)
     }
   }
 
@@ -213,20 +234,27 @@ export default function App() {
           </div>
         )}
 
-        {loading && !conversation && (
-          <div className="text-center py-8 text-slate-400">Loading...</div>
-        )}
-
         <div className="grid grid-cols-12 gap-6">
           <div className="col-span-4">
-            <TaskList
-              tasks={tasks}
-              selectedTask={selectedTask}
-              onSelectTask={loadConversation}
-            />
+            {loadingTasks ? (
+              <div className="bg-slate-800 rounded-lg shadow-lg p-8 text-center text-slate-400 border border-slate-700">
+                Loading tasks...
+              </div>
+            ) : (
+              <TaskList
+                tasks={tasks}
+                selectedTask={selectedTask}
+                onSelectTask={loadConversation}
+                disabled={loadingConversation}
+              />
+            )}
           </div>
           <div className="col-span-8">
-            {conversation ? (
+            {loadingConversation ? (
+              <div className="bg-slate-800 rounded-lg shadow-lg p-8 text-center text-slate-400 border border-slate-700">
+                <div className="animate-pulse">Loading conversation...</div>
+              </div>
+            ) : conversation ? (
               <ConversationView
                 messages={conversation}
                 taskId={selectedTask ?? uploadedFileName ?? 'uploaded'}

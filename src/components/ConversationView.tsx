@@ -15,8 +15,24 @@ interface ContentBlock {
 
 interface Message {
   role: 'user' | 'assistant'
-  content: ContentBlock[]
+  content: ContentBlock[] | string
   ts: number
+  isSummary?: boolean
+  condenseId?: string
+  condenseParent?: string
+  isTruncationMarker?: boolean
+  truncationId?: string
+  truncationParent?: string
+}
+
+function normalizeContent(content: ContentBlock[] | string): ContentBlock[] {
+  if (typeof content === 'string') {
+    return [{ type: 'text', text: content }]
+  }
+  if (!Array.isArray(content)) {
+    return [{ type: 'text', text: String(content) }]
+  }
+  return content
 }
 
 interface ConversationViewProps {
@@ -26,16 +42,18 @@ interface ConversationViewProps {
 }
 
 export default function ConversationView({ messages, taskId, onClose }: ConversationViewProps) {
-  const [expandAll, setExpandAll] = useState(true)
+  const [expandAll, setExpandAll] = useState(false)
   const [isAtBottom, setIsAtBottom] = useState(true)
+  const [filterCondensed, setFilterCondensed] = useState(true)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
+  // Track tool uses without results (from main)
   const toolUsesMissingResults = useMemo(() => {
     const toolResultIds = new Set<string>()
     const toolUsePositions = new Map<string, { messageIndex: number; blockIndex: number }>()
     
     messages.forEach((message, messageIndex) => {
-      message.content.forEach((block, blockIndex) => {
+      normalizeContent(message.content).forEach((block, blockIndex) => {
         if (block.type === 'tool_result' && block.tool_use_id) {
           toolResultIds.add(block.tool_use_id)
         }
@@ -59,6 +77,42 @@ export default function ConversationView({ messages, taskId, onClose }: Conversa
     
     return missingResults
   }, [messages])
+
+  // Condensed message filtering (from PR)
+  const existingSummaryIds = useMemo(() => new Set(
+    messages
+      .filter((m) => m.isSummary && m.condenseId)
+      .map((m) => m.condenseId!)
+  ), [messages])
+
+  const existingTruncationIds = useMemo(() => new Set(
+    messages
+      .filter((m) => m.isTruncationMarker && m.truncationId)
+      .map((m) => m.truncationId!)
+  ), [messages])
+
+  // Calculate how many messages would be hidden
+  const hiddenCount = useMemo(() => {
+    return messages.filter((m) =>
+      (m.condenseParent && existingSummaryIds.has(m.condenseParent)) ||
+      (m.truncationParent && existingTruncationIds.has(m.truncationParent))
+    ).length
+  }, [messages, existingSummaryIds, existingTruncationIds])
+
+  // Filter messages based on visibility algorithm
+  const filteredMessages = useMemo(() => {
+    if (!filterCondensed) return messages
+
+    return messages.filter((m) => {
+      if (m.condenseParent && existingSummaryIds.has(m.condenseParent)) {
+        return false
+      }
+      if (m.truncationParent && existingTruncationIds.has(m.truncationParent)) {
+        return false
+      }
+      return true
+    })
+  }, [messages, filterCondensed, existingSummaryIds, existingTruncationIds])
 
   function formatTime(timestamp: number) {
     return new Date(timestamp).toLocaleString()
@@ -99,10 +153,31 @@ export default function ConversationView({ messages, taskId, onClose }: Conversa
     <div className="bg-slate-800 rounded-lg shadow-lg overflow-hidden border border-slate-700">
       <div className="p-4 border-b border-slate-700 bg-slate-800/50 flex items-center justify-between sticky top-0 z-10">
         <div>
-          <h2 className="font-semibold text-slate-200">Conversation</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="font-semibold text-slate-200">Conversation</h2>
+            <span className="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full">
+              {filteredMessages.length} messages
+            </span>
+          </div>
           <div className="text-xs text-slate-400 font-mono">{taskId}</div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {hiddenCount > 0 && (
+            <button
+              onClick={() => setFilterCondensed(!filterCondensed)}
+              className={`px-3 py-1 text-sm rounded transition-colors ${
+                filterCondensed
+                  ? 'bg-purple-700 hover:bg-purple-600 text-purple-100'
+                  : 'bg-slate-700 hover:bg-slate-600 text-slate-200'
+              }`}
+              title={filterCondensed
+                ? `Showing ${filteredMessages.length} messages (${hiddenCount} hidden)`
+                : `Showing all ${messages.length} messages`
+              }
+            >
+              {filterCondensed ? `📦 ${hiddenCount} Hidden` : `📦 Hide ${hiddenCount}`}
+            </button>
+          )}
           <button
             onClick={() => setExpandAll(!expandAll)}
             className="px-3 py-1 text-sm bg-slate-700 hover:bg-slate-600 text-slate-200 rounded transition-colors"
@@ -131,37 +206,61 @@ export default function ConversationView({ messages, taskId, onClose }: Conversa
           onScroll={handleScroll}
           className="max-h-[calc(100vh-200px)] overflow-y-auto p-4 space-y-4"
         >
-        {messages.map((message, index) => (
-          <div
-            key={index}
-            className={`rounded-lg p-4 ${
-              message.role === 'user'
-                ? 'bg-blue-900/30 border border-blue-800'
-                : 'bg-slate-700/50 border border-slate-600'
-            }`}
-          >
-            <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-600">
-              <span className={`font-semibold text-sm ${
-                message.role === 'user' ? 'text-blue-300' : 'text-slate-300'
-              }`}>
-                {message.role === 'user' ? '👤 User' : '🤖 Assistant'}
-              </span>
-              <span className="text-xs text-slate-400">
-                {formatTime(message.ts)}
-              </span>
+          {filteredMessages.map((message, index) => (
+            <div
+              key={index}
+              className={`rounded-lg p-4 ${
+                message.isSummary
+                  ? 'bg-purple-900/30 border border-purple-700'
+                  : message.isTruncationMarker
+                    ? 'bg-orange-900/30 border border-orange-700'
+                    : message.role === 'user'
+                      ? 'bg-blue-900/30 border border-blue-800'
+                      : 'bg-slate-700/50 border border-slate-600'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-600">
+                <div className="flex items-center gap-2">
+                  <span className={`font-semibold text-sm ${
+                    message.isSummary
+                      ? 'text-purple-300'
+                      : message.isTruncationMarker
+                        ? 'text-orange-300'
+                        : message.role === 'user' ? 'text-blue-300' : 'text-slate-300'
+                  }`}>
+                    {message.isSummary
+                      ? '📋 Summary'
+                      : message.isTruncationMarker
+                        ? '✂️ Truncation'
+                        : message.role === 'user' ? '👤 User' : '🤖 Assistant'}
+                  </span>
+                  {message.condenseId && (
+                    <span className="text-xs bg-purple-900/50 text-purple-300 px-1.5 py-0.5 rounded">
+                      condense: {message.condenseId.slice(0, 8)}…
+                    </span>
+                  )}
+                  {message.truncationId && (
+                    <span className="text-xs bg-orange-900/50 text-orange-300 px-1.5 py-0.5 rounded">
+                      truncation: {message.truncationId.slice(0, 8)}…
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs text-slate-400">
+                  {formatTime(message.ts)}
+                </span>
+              </div>
+              
+              <div className="space-y-3">
+                {normalizeContent(message.content).map((block, blockIndex) => (
+                  <MessageBlock
+                    key={blockIndex}
+                    block={block}
+                    expanded={expandAll}
+                    hasMissingResult={block.type === 'tool_use' && block.id ? toolUsesMissingResults.has(block.id) : false}
+                  />
+                ))}
+              </div>
             </div>
-            
-            <div className="space-y-3">
-              {message.content.map((block, blockIndex) => (
-                <MessageBlock
-                  key={blockIndex}
-                  block={block}
-                  expanded={expandAll}
-                  hasMissingResult={block.type === 'tool_use' && block.id ? toolUsesMissingResults.has(block.id) : false}
-                />
-              ))}
-            </div>
-          </div>
           ))}
         </div>
         

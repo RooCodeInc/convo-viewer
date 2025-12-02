@@ -32,6 +32,34 @@ export default function MessageBlock({ block, expanded: initialExpanded, hasMiss
     setIsExpanded(initialExpanded)
   }, [initialExpanded])
 
+  // Get a preview string for the collapsed state (from PR)
+  function getPreviewText(): string {
+    const maxLength = 100
+    let text = ''
+    
+    switch (block.type) {
+      case 'text':
+      case 'reasoning':
+        text = block.text || ''
+        break
+      case 'tool_use':
+        text = block.input ? JSON.stringify(block.input) : ''
+        break
+      case 'tool_result':
+        text = block.content || ''
+        break
+      case 'image':
+        return '[image]'
+      default:
+        text = JSON.stringify(block)
+    }
+    
+    // Clean up whitespace and truncate
+    const cleaned = text.replace(/\s+/g, ' ').trim()
+    if (cleaned.length <= maxLength) return cleaned
+    return cleaned.slice(0, maxLength) + '…'
+  }
+
   function renderBlockHeader() {
     const typeColors: Record<string, string> = {
       text: 'bg-green-900/50 text-green-300',
@@ -44,40 +72,43 @@ export default function MessageBlock({ block, expanded: initialExpanded, hasMiss
     const bgColor = typeColors[block.type] || 'bg-slate-700 text-slate-300'
 
     return (
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className={`px-2 py-0.5 rounded text-xs font-medium ${bgColor}`}>
-            {block.type}
+      <div
+        className={`flex items-center gap-2 ${isExpanded ? 'mb-2 cursor-pointer hover:bg-slate-700/50 -mx-3 -mt-3 px-3 pt-3 pb-2 rounded-t flex-wrap' : ''}`}
+        onClick={isExpanded ? () => setIsExpanded(false) : undefined}
+      >
+        <span className={`px-2 py-0.5 rounded text-xs font-medium shrink-0 ${bgColor}`}>
+          {block.type}
+        </span>
+        {block.name && (
+          <span className="text-sm font-mono text-slate-300 shrink-0">{block.name}</span>
+        )}
+        {block.id && (
+          <span className="text-xs text-slate-500 font-mono shrink-0">{block.id}</span>
+        )}
+        {block.tool_use_id && (
+          <span className="text-xs text-slate-500 font-mono shrink-0">ref: {block.tool_use_id}</span>
+        )}
+        {block.is_error && (
+          <span className="px-2 py-0.5 rounded text-xs font-medium bg-red-900/50 text-red-300 shrink-0">
+            Error
           </span>
-          {block.name && (
-            <span className="text-sm font-mono text-slate-300">{block.name}</span>
-          )}
-          {block.id && (
-            <span className="text-xs text-slate-500 font-mono">{block.id}</span>
-          )}
-          {block.tool_use_id && (
-            <span className="text-xs text-slate-500 font-mono">ref: {block.tool_use_id}</span>
-          )}
-          {block.is_error && (
-            <span className="px-2 py-0.5 rounded text-xs font-medium bg-red-900/50 text-red-300">
-              Error
-            </span>
-          )}
-          {hasMissingResult && (
-            <span className="px-2 py-0.5 rounded text-xs font-medium bg-orange-900/50 text-orange-300 flex items-center gap-1" title="No tool result received">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-              Missing Result
-            </span>
-          )}
-        </div>
-        <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="text-xs text-slate-400 hover:text-slate-200"
-        >
+        )}
+        {hasMissingResult && (
+          <span className="px-2 py-0.5 rounded text-xs font-medium bg-orange-900/50 text-orange-300 flex items-center gap-1 shrink-0" title="No tool result received">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+            Missing Result
+          </span>
+        )}
+        {!isExpanded && (
+          <span className="text-xs text-slate-500 truncate min-w-0 flex-1">
+            {getPreviewText()}
+          </span>
+        )}
+        <span className={`text-xs text-slate-400 shrink-0 ${isExpanded ? 'ml-auto' : ''}`}>
           {isExpanded ? '▼ Collapse' : '▶ Expand'}
-        </button>
+        </span>
       </div>
     )
   }
@@ -206,7 +237,10 @@ export default function MessageBlock({ block, expanded: initialExpanded, hasMiss
   }
 
   return (
-    <div className="border border-slate-600 rounded p-3 bg-slate-800/50">
+    <div
+      className={`border border-slate-600 rounded p-3 bg-slate-800/50 ${!isExpanded ? 'cursor-pointer hover:bg-slate-700/50' : ''}`}
+      onClick={!isExpanded ? () => setIsExpanded(true) : undefined}
+    >
       {renderBlockHeader()}
       {renderContent()}
     </div>
