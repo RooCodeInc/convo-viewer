@@ -3,6 +3,7 @@ import cors from 'cors';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
+import net from 'net';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -96,7 +97,40 @@ app.get('/api/task/:source/:id', async (req, res) => {
   }
 });
 
-const PORT = 3001;
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+const DEFAULT_PORT = 3001;
+const MAX_PORT_ATTEMPTS = 10;
+const PORT_FILE = path.join(os.tmpdir(), 'convo-viewer-server-port');
+
+async function isPortAvailable(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once('error', () => resolve(false));
+    server.once('listening', () => {
+      server.close();
+      resolve(true);
+    });
+    server.listen(port);
+  });
+}
+
+async function findAvailablePort(startPort: number): Promise<number> {
+  for (let port = startPort; port < startPort + MAX_PORT_ATTEMPTS; port++) {
+    if (await isPortAvailable(port)) {
+      return port;
+    }
+    console.log(`Port ${port} is in use, trying ${port + 1}...`);
+  }
+  throw new Error(`Could not find an available port after ${MAX_PORT_ATTEMPTS} attempts`);
+}
+
+async function startServer() {
+  const port = await findAvailablePort(DEFAULT_PORT);
+  
+  await fs.writeFile(PORT_FILE, port.toString(), 'utf-8');
+  
+  app.listen(port, () => {
+    console.log(`Server running on http://localhost:${port}`);
+  });
+}
+
+startServer().catch(console.error);
