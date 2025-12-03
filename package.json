@@ -2,6 +2,7 @@
   "name": "rooversation",
   "version": "1.0.0",
   "description": "RooVersation - Web app to view Roo Code conversation history",
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"sleep 1 && npm run dev:client\"",
